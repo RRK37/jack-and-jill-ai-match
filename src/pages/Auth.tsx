@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,8 +20,19 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [confirmationSent, setConfirmationSent] = useState(false);
 
-  const { signIn, signUp } = useAuth();
+  const { user, userRole, signIn, signUp } = useAuth();
   const navigate = useNavigate();
+
+  // Redirect authenticated users based on role
+  useEffect(() => {
+    if (user && userRole) {
+      if (userRole === "candidate") {
+        navigate("/candidate/onboarding", { replace: true });
+      } else if (userRole === "employer") {
+        navigate("/employer/briefing", { replace: true });
+      }
+    }
+  }, [user, userRole, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
