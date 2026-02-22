@@ -7,7 +7,7 @@ const db = supabase as any;
 
 // ─── Backend API (AI chat endpoints only) ───────────────
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+const API_BASE_URL = "https://jack-jill-engine-api-production.up.railway.app";
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -49,14 +49,14 @@ export class ApiError extends Error {
 // ─── Jack (Candidate AI Agent) ──────────────────────────
 
 export async function jackGreeting(): Promise<{ message: string }> {
-  return apiRequest("/api/jack/greeting", { method: "POST" });
+  return apiRequest("/jack-greeting", { method: "POST" });
 }
 
 export async function jackChat(message: string, conversationType?: string): Promise<{
   reply: string;
   profileUpdates?: Record<string, unknown> | null;
 }> {
-  return apiRequest("/api/jack/chat", {
+  return apiRequest("/jack-chat", {
     method: "POST",
     body: JSON.stringify({ message, conversationType }),
   });
@@ -65,7 +65,7 @@ export async function jackChat(message: string, conversationType?: string): Prom
 // ─── Jill (Employer AI Agent) ───────────────────────────
 
 export async function jillGreeting(): Promise<{ message: string }> {
-  return apiRequest("/api/jill/greeting", { method: "POST" });
+  return apiRequest("/jill-greeting", { method: "POST" });
 }
 
 export async function jillChat(message: string): Promise<{
@@ -73,7 +73,7 @@ export async function jillChat(message: string): Promise<{
   briefingComplete: boolean;
   briefingData?: Record<string, unknown>;
 }> {
-  return apiRequest("/api/jill/chat", {
+  return apiRequest("/jill-chat", {
     method: "POST",
     body: JSON.stringify({ message }),
   });
