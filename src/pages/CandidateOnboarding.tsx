@@ -53,11 +53,7 @@ const CandidateOnboarding = () => {
       scribe.disconnect();
       setIsMicOn(false);
     } else {
-      const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
-      if (!apiKey) {
-        console.error("ElevenLabs API key not configured");
-        return;
-      }
+      const apiKey = "sk_2429e7f6cb06a59b0baaafa4e40d629f9fe3cf672b121b54";
       await scribe.connect({
         token: apiKey,
         microphone: {
