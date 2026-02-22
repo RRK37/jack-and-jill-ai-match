@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react"; // v2
 import { motion } from "framer-motion";
 import { Mic, MicOff, PhoneOff, ArrowRight, Send, MessageSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useScribe, CommitStrategy } from "@elevenlabs/react";
+import { useScribe, type ScribeHookOptions } from "@elevenlabs/react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   jackGreeting,
@@ -54,9 +54,16 @@ const CandidateOnboarding = () => {
   // Load profile and fetch greeting on mount
   useEffect(() => {
     (async () => {
-      const profile = await getCandidateProfile();
-      const profileStr = profile ? formatCandidateProfile(profile) : "none";
-      candidateProfileRef.current = profileStr;
+      let profileStr = "none";
+      try {
+        const profile = await getCandidateProfile();
+        if (profile) {
+          profileStr = formatCandidateProfile(profile);
+          candidateProfileRef.current = profileStr;
+        }
+      } catch (err) {
+        console.error("Failed to load candidate profile:", err);
+      }
 
       try {
         const greeting = await jackGreeting(profileStr);
@@ -65,6 +72,9 @@ const CandidateOnboarding = () => {
         transcriptRef.current = [line];
       } catch (err) {
         console.error("Failed to get Jack greeting:", err);
+        const fallback = { speaker: "Jack", text: "Hey! I'm Jack. Tell me about your dream role — what kind of work lights you up?" };
+        setTranscriptLines([fallback]);
+        transcriptRef.current = [fallback];
       }
     })();
   }, []);
@@ -104,12 +114,15 @@ const CandidateOnboarding = () => {
     }
   }, []);
 
+  const sendToJackRef = useRef(sendToJack);
+  sendToJackRef.current = sendToJack;
+
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
-    commitStrategy: CommitStrategy.VAD,
+    commitStrategy: "vad" as ScribeHookOptions["commitStrategy"],
     onCommittedTranscript: (data) => {
       if (data.text.trim()) {
-        sendToJack(data.text.trim());
+        sendToJackRef.current(data.text.trim());
       }
     },
   });
