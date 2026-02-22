@@ -43,7 +43,13 @@ const CandidateOnboarding = () => {
   const [showTextInput, setShowTextInput] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const candidateProfileRef = useRef<string>("none");
+  const transcriptRef = useRef<TranscriptLine[]>([]);
+  const isSendingRef = useRef(false);
   const navigate = useNavigate();
+
+  // Keep refs in sync
+  useEffect(() => { transcriptRef.current = transcriptLines; }, [transcriptLines]);
+  useEffect(() => { isSendingRef.current = isSending; }, [isSending]);
 
   // Load profile and fetch greeting on mount
   useEffect(() => {
@@ -54,7 +60,9 @@ const CandidateOnboarding = () => {
 
       try {
         const greeting = await jackGreeting(profileStr);
-        setTranscriptLines([{ speaker: "Jack", text: greeting.message }]);
+        const line = { speaker: "Jack", text: greeting.message };
+        setTranscriptLines([line]);
+        transcriptRef.current = [line];
       } catch (err) {
         console.error("Failed to get Jack greeting:", err);
       }
@@ -62,16 +70,21 @@ const CandidateOnboarding = () => {
   }, []);
 
   const sendToJack = useCallback(async (userMessage: string) => {
-    if (isSending) return;
+    if (isSendingRef.current) return;
+    isSendingRef.current = true;
     setIsSending(true);
 
-    const updatedLines = [...transcriptLines, { speaker: "You", text: userMessage }];
+    const userLine = { speaker: "You", text: userMessage };
+    const updatedLines = [...transcriptRef.current, userLine];
+    transcriptRef.current = updatedLines;
     setTranscriptLines(updatedLines);
 
     try {
       const history = formatConversationHistory(updatedLines);
       const result = await jackChat(userMessage, history, candidateProfileRef.current);
-      setTranscriptLines((prev) => [...prev, { speaker: "Jack", text: result.reply }]);
+      const jackLine = { speaker: "Jack", text: result.reply };
+      transcriptRef.current = [...transcriptRef.current, jackLine];
+      setTranscriptLines((prev) => [...prev, jackLine]);
 
       if (result.profileUpdates) {
         await updateCandidateProfile(result.profileUpdates);
@@ -82,11 +95,14 @@ const CandidateOnboarding = () => {
       }
     } catch (err) {
       console.error("Jack chat error:", err);
-      setTranscriptLines((prev) => [...prev, { speaker: "Jack", text: "Sorry, I had trouble processing that. Could you try again?" }]);
+      const errLine = { speaker: "Jack", text: "Sorry, I had trouble processing that. Could you try again?" };
+      transcriptRef.current = [...transcriptRef.current, errLine];
+      setTranscriptLines((prev) => [...prev, errLine]);
     } finally {
+      isSendingRef.current = false;
       setIsSending(false);
     }
-  }, [transcriptLines, isSending]);
+  }, []);
 
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
