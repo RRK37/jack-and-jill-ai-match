@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Mic, MicOff, PhoneOff, ArrowRight, Send, MessageSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-
+import { useScribe, CommitStrategy } from "@elevenlabs/react";
 const AudioWaveform = ({ active }: { active: boolean }) => (
   <div className="flex items-center justify-center gap-1 h-16">
     {Array.from({ length: 24 }).map((_, i) => (
@@ -30,12 +30,44 @@ interface TranscriptLine {
 }
 
 const CandidateOnboarding = () => {
-  const [isMicOn, setIsMicOn] = useState(true);
+  const [isMicOn, setIsMicOn] = useState(false);
   const [isActive, setIsActive] = useState(true);
   const [transcriptLines, setTranscriptLines] = useState<TranscriptLine[]>([]);
   const [textInput, setTextInput] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
   const navigate = useNavigate();
+
+  const scribe = useScribe({
+    modelId: "scribe_v2_realtime",
+    commitStrategy: CommitStrategy.VAD,
+    onCommittedTranscript: (data) => {
+      if (data.text.trim()) {
+        setTranscriptLines((prev) => [...prev, { speaker: "You", text: data.text.trim() }]);
+        // TODO: send transcribed text to /api/jack/chat
+      }
+    },
+  });
+
+  const toggleMic = useCallback(async () => {
+    if (scribe.isConnected) {
+      scribe.disconnect();
+      setIsMicOn(false);
+    } else {
+      const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
+      if (!apiKey) {
+        console.error("ElevenLabs API key not configured");
+        return;
+      }
+      await scribe.connect({
+        token: apiKey,
+        microphone: {
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+      setIsMicOn(true);
+    }
+  }, [scribe]);
 
   const sendTextMessage = () => {
     if (!textInput.trim()) return;
@@ -43,13 +75,6 @@ const CandidateOnboarding = () => {
     setTextInput("");
     // TODO: send to /api/jack/chat endpoint
   };
-
-  useEffect(() => {
-    fetch("/api/jack/transcript")
-      .then((res) => res.json())
-      .then((data) => setTranscriptLines(data.lines))
-      .catch(() => {});
-  }, []);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -82,13 +107,13 @@ const CandidateOnboarding = () => {
 
         {/* Waveform */}
         <div className="w-full mb-8">
-          <AudioWaveform active={isActive && isMicOn} />
+          <AudioWaveform active={isActive && isMicOn && scribe.isConnected} />
         </div>
 
         {/* Controls */}
         <div className="flex items-center gap-4 mb-10">
           <button
-            onClick={() => setIsMicOn(!isMicOn)}
+            onClick={toggleMic}
             className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
               isMicOn ? "bg-jack-muted jack-accent" : "bg-secondary text-muted-foreground"
             }`}
@@ -139,6 +164,9 @@ const CandidateOnboarding = () => {
         {/* Transcript */}
         <div className="w-full glass-card p-5 space-y-4 max-h-64 overflow-y-auto">
           <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Live Transcript</p>
+          {transcriptLines.length === 0 && !scribe.partialTranscript && (
+            <p className="text-sm text-muted-foreground italic">Tap the mic and start speaking…</p>
+          )}
           {transcriptLines.map((line, i) => (
             <motion.div
               key={i}
@@ -155,6 +183,12 @@ const CandidateOnboarding = () => {
               <p className="text-sm text-muted-foreground leading-relaxed">{line.text}</p>
             </motion.div>
           ))}
+          {scribe.partialTranscript && (
+            <div className="flex gap-3 opacity-60">
+              <span className="text-xs font-medium mt-0.5 shrink-0 text-foreground">You</span>
+              <p className="text-sm text-muted-foreground leading-relaxed italic">{scribe.partialTranscript}…</p>
+            </div>
+          )}
         </div>
 
         {/* Skip */}
