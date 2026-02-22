@@ -1,30 +1,48 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, MapPin, Building2, TrendingUp, MessageCircle, X, Send, Briefcase } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-const profileData = {
-  name: "Alex Chen",
-  title: "Senior Product Designer",
-  skills: ["Product Strategy", "Design Systems", "User Research", "Figma", "Prototyping"],
-  goals: "Seeking a lead design role at a mission-driven startup with strong remote culture",
-  vibe: "Collaborative, curious, impact-oriented",
-};
+interface ProfileData {
+  name: string;
+  title: string;
+  skills: string[];
+  goals: string;
+  vibe: string;
+}
 
-const matchedJobs = [
-  { company: "Notion", role: "Staff Product Designer", location: "Remote", score: 96, tags: ["Design Systems", "Remote"] },
-  { company: "Linear", role: "Senior Designer", location: "San Francisco", score: 91, tags: ["Product", "Startup"] },
-  { company: "Vercel", role: "Design Lead", location: "Remote", score: 88, tags: ["Dev Tools", "Remote"] },
-  { company: "Stripe", role: "Product Designer", location: "Seattle", score: 84, tags: ["Fintech", "Growth"] },
-];
+interface MatchedJob {
+  company: string;
+  role: string;
+  location: string;
+  score: number;
+  tags: string[];
+}
 
 const CandidateDashboard = () => {
+  const [profileData, setProfileData] = useState<ProfileData | null>(null);
+  const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { from: "jack", text: "Hey Alex! Your profile is looking great. Want me to help prep for any of these matches?" },
-  ]);
+  const [messages, setMessages] = useState<{ from: string; text: string }[]>([]);
   const [input, setInput] = useState("");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetch("/api/candidate/profile")
+      .then((res) => res.json())
+      .then((data) => setProfileData(data))
+      .catch(() => {});
+
+    fetch("/api/candidate/matches")
+      .then((res) => res.json())
+      .then((data) => setMatchedJobs(data))
+      .catch(() => {});
+
+    fetch("/api/jack/greeting")
+      .then((res) => res.json())
+      .then((data) => setMessages([{ from: "jack", text: data.message }]))
+      .catch(() => {});
+  }, []);
 
   const sendMessage = () => {
     if (!input.trim()) return;
@@ -59,39 +77,43 @@ const CandidateDashboard = () => {
 
       <div className="max-w-5xl mx-auto px-6 py-8">
         {/* Profile Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-6 mb-8"
-        >
-          <div className="flex flex-col md:flex-row md:items-start gap-6">
-            <div className="w-16 h-16 rounded-2xl bg-jack-muted flex items-center justify-center shrink-0">
-              <span className="font-display text-xl font-bold jack-accent">AC</span>
-            </div>
-            <div className="flex-1">
-              <h1 className="font-display text-2xl font-bold mb-1">{profileData.name}</h1>
-              <p className="text-muted-foreground mb-4">{profileData.title}</p>
-              <div className="flex flex-wrap gap-2 mb-4">
-                {profileData.skills.map((s) => (
-                  <span key={s} className="px-3 py-1 rounded-lg bg-secondary text-xs text-secondary-foreground">{s}</span>
-                ))}
+        {profileData ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-card p-6 mb-8"
+          >
+            <div className="flex flex-col md:flex-row md:items-start gap-6">
+              <div className="w-16 h-16 rounded-2xl bg-jack-muted flex items-center justify-center shrink-0">
+                <span className="font-display text-xl font-bold jack-accent">AC</span>
               </div>
-              <div className="grid md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-muted-foreground mb-1">Goals</p>
-                  <p className="text-foreground">{profileData.goals}</p>
+              <div className="flex-1">
+                <h1 className="font-display text-2xl font-bold mb-1">{profileData.name}</h1>
+                <p className="text-muted-foreground mb-4">{profileData.title}</p>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {profileData.skills.map((s) => (
+                    <span key={s} className="px-3 py-1 rounded-lg bg-secondary text-xs text-secondary-foreground">{s}</span>
+                  ))}
                 </div>
-                <div>
-                  <p className="text-muted-foreground mb-1">Vibe</p>
-                  <p className="text-foreground flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 jack-accent" />
-                    {profileData.vibe}
-                  </p>
+                <div className="grid md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground mb-1">Goals</p>
+                    <p className="text-foreground">{profileData.goals}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground mb-1">Vibe</p>
+                    <p className="text-foreground flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 jack-accent" />
+                      {profileData.vibe}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        ) : (
+          <div className="glass-card p-6 mb-8 text-center text-muted-foreground text-sm">Loading profile...</div>
+        )}
 
         {/* Matches */}
         <motion.div
