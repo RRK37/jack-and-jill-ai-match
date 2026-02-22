@@ -34,26 +34,47 @@ const Auth = () => {
     }
   }, [user, userRole, navigate]);
 
+  // Timeout fallback: if user is set but role never loads, stop loading after 8s
+  useEffect(() => {
+    if (!user || userRole) return;
+    const timer = setTimeout(() => {
+      setLoading(false);
+      setError("Could not determine your account role. Please try signing in again.");
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [user, userRole]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    if (mode === "signup") {
-      const { error } = await signUp(email, password, role);
-      if (error) {
-        setError(error.message);
+    try {
+      if (mode === "signup") {
+        const { error } = await signUp(email, password, role);
+        if (error) {
+          setError(error.message);
+          setLoading(false);
+          return;
+        }
+        // With auto-confirm, user is logged in immediately.
+        // The useEffect redirect will fire once userRole is set by AuthContext.
+        // Keep loading=true so the user sees the spinner until redirect happens.
+        return;
+      } else {
+        const { error } = await signIn(email, password);
+        if (error) {
+          setError(error.message);
+          setLoading(false);
+          return;
+        }
+        // Same — keep loading=true until redirect fires.
+        return;
       }
-      // Navigation handled by auth state change → role-based redirect
-    } else {
-      const { error } = await signIn(email, password);
-      if (error) {
-        setError(error.message);
-      }
-      // Navigation handled by auth state change → role-based redirect in App
+    } catch (err: any) {
+      setError(err.message || "Something went wrong");
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   if (confirmationSent) {
