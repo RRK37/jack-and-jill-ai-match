@@ -58,11 +58,18 @@ export async function jackChat(
     candidate_profile: candidateProfile || "none",
   });
 
-  const parsed = JSON.parse(stripCodeFence(content));
-  return {
-    reply: parsed.reply,
-    profileUpdates: parsed.profileUpdates || null,
-  };
+  // Engine may return structured JSON or plain text
+  const stripped = stripCodeFence(content);
+  try {
+    const parsed = JSON.parse(stripped);
+    return {
+      reply: parsed.reply || stripped,
+      profileUpdates: parsed.profileUpdates || null,
+    };
+  } catch {
+    // Plain text response — use as-is
+    return { reply: stripped, profileUpdates: null };
+  }
 }
 
 // ─── Jill (Employer AI Agent) ───────────────────────────
@@ -91,12 +98,17 @@ export async function jillChat(
     briefing_data: briefingData || "none",
   });
 
-  const parsed = JSON.parse(stripCodeFence(content));
-  return {
-    reply: parsed.reply,
-    briefingComplete: parsed.briefingComplete ?? false,
-    briefingData: parsed.briefingData || undefined,
-  };
+  const stripped = stripCodeFence(content);
+  try {
+    const parsed = JSON.parse(stripped);
+    return {
+      reply: parsed.reply || stripped,
+      briefingComplete: parsed.briefingComplete ?? false,
+      briefingData: parsed.briefingData || undefined,
+    };
+  } catch {
+    return { reply: stripped, briefingComplete: false };
+  }
 }
 
 // ─── Direct DB: Candidate Profile ───────────────────────
