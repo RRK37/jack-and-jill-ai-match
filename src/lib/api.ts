@@ -1,38 +1,27 @@
 import { supabase } from "@/integrations/supabase/client";
 
-// The auto-generated types are empty until schema syncs.
-// Cast to `any` for .from() calls against live DB tables.
+// Cast for untyped table access
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
-// ─── Backend API (AI chat endpoints only) ───────────────
+// ─── Engine proxy (SSE backend via edge function) ───────
 
-const API_BASE_URL = "https://jack-jill-engine-api-production.up.railway.app";
-
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (session?.access_token) {
-    headers["Authorization"] = `Bearer ${session.access_token}`;
-  }
-  return headers;
+function stripCodeFence(raw: string): string {
+  return raw
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```\s*$/, "")
+    .trim();
 }
 
-async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const headers = await getAuthHeaders();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: { ...headers, ...options.headers },
+async function engineCall(slug: string, data: Record<string, string>): Promise<string> {
+  const { data: result, error } = await supabase.functions.invoke("engine-proxy", {
+    body: { slug, data },
   });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new ApiError(response.status, error.error || "Request failed", error.code);
-  }
-
-  return response.json();
+  if (error) throw new ApiError(500, error.message);
+  if (result?.error) throw new ApiError(500, result.error);
+  return result.content as string;
 }
 
 export class ApiError extends Error {
@@ -48,35 +37,66 @@ export class ApiError extends Error {
 
 // ─── Jack (Candidate AI Agent) ──────────────────────────
 
-export async function jackGreeting(): Promise<{ message: string }> {
-  return apiRequest("/jack-greeting", { method: "POST" });
+export async function jackGreeting(candidateProfile?: string): Promise<{ message: string }> {
+  const content = await engineCall("jack-greeting", {
+    candidate_profile: candidateProfile || "none",
+  });
+  return { message: content };
 }
 
-export async function jackChat(message: string, conversationType?: string): Promise<{
+export async function jackChat(
+  message: string,
+  conversationHistory: string,
+  candidateProfile: string
+): Promise<{
   reply: string;
   profileUpdates?: Record<string, unknown> | null;
 }> {
-  return apiRequest("/jack-chat", {
-    method: "POST",
-    body: JSON.stringify({ message, conversationType }),
+  const content = await engineCall("jack-chat", {
+    message,
+    conversation_history: conversationHistory || "none",
+    candidate_profile: candidateProfile || "none",
   });
+
+  const parsed = JSON.parse(stripCodeFence(content));
+  return {
+    reply: parsed.reply,
+    profileUpdates: parsed.profileUpdates || null,
+  };
 }
 
 // ─── Jill (Employer AI Agent) ───────────────────────────
 
-export async function jillGreeting(): Promise<{ message: string }> {
-  return apiRequest("/jill-greeting", { method: "POST" });
+export async function jillGreeting(employerProfile?: string): Promise<{ message: string }> {
+  const content = await engineCall("jill-greeting", {
+    employer_profile: employerProfile || "none",
+  });
+  return { message: content };
 }
 
-export async function jillChat(message: string): Promise<{
+export async function jillChat(
+  message: string,
+  conversationHistory: string,
+  employerProfile: string,
+  briefingData: string
+): Promise<{
   reply: string;
   briefingComplete: boolean;
   briefingData?: Record<string, unknown>;
 }> {
-  return apiRequest("/jill-chat", {
-    method: "POST",
-    body: JSON.stringify({ message }),
+  const content = await engineCall("jill-chat", {
+    message,
+    conversation_history: conversationHistory || "none",
+    employer_profile: employerProfile || "none",
+    briefing_data: briefingData || "none",
   });
+
+  const parsed = JSON.parse(stripCodeFence(content));
+  return {
+    reply: parsed.reply,
+    briefingComplete: parsed.briefingComplete ?? false,
+    briefingData: parsed.briefingData || undefined,
+  };
 }
 
 // ─── Direct DB: Candidate Profile ───────────────────────
@@ -89,6 +109,9 @@ export interface CandidateProfile {
   vibe: string | null;
   experience_years: number | null;
   location: string | null;
+  remote_ok: boolean | null;
+  salary_min: number | null;
+  salary_max: number | null;
 }
 
 export async function getCandidateProfile(): Promise<CandidateProfile | null> {
@@ -97,12 +120,96 @@ export async function getCandidateProfile(): Promise<CandidateProfile | null> {
 
   const { data, error } = await db
     .from("candidates")
-    .select("name, title, skills, goals, vibe, experience_years, location")
+    .select("name, title, skills, goals, vibe, experience_years, location, remote_ok, salary_min, salary_max")
     .eq("user_id", user.id)
     .single();
 
   if (error || !data) return null;
   return data as CandidateProfile;
+}
+
+export function formatCandidateProfile(p: CandidateProfile): string {
+  const parts = [`name: ${p.name}`];
+  if (p.title) parts.push(`title: ${p.title}`);
+  if (p.skills?.length) parts.push(`skills: [${p.skills.join(", ")}]`);
+  if (p.goals) parts.push(`goals: ${p.goals}`);
+  if (p.vibe) parts.push(`vibe: ${p.vibe}`);
+  if (p.experience_years != null) parts.push(`experience_years: ${p.experience_years}`);
+  if (p.location) parts.push(`location: ${p.location}`);
+  if (p.remote_ok != null) parts.push(`remote_ok: ${p.remote_ok}`);
+  if (p.salary_min != null) parts.push(`salary_min: ${p.salary_min}`);
+  if (p.salary_max != null) parts.push(`salary_max: ${p.salary_max}`);
+  return parts.join(", ");
+}
+
+export async function updateCandidateProfile(updates: Record<string, unknown>): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { error } = await db
+    .from("candidates")
+    .update(updates)
+    .eq("user_id", user.id);
+
+  if (error) console.error("Failed to update candidate profile:", error);
+}
+
+// ─── Direct DB: Employer Profile ────────────────────────
+
+export interface EmployerProfile {
+  company_name: string;
+  role_title: string | null;
+  required_skills: string[] | null;
+  location: string | null;
+  remote_ok: boolean | null;
+  team_size: string | null;
+  salary_min: number | null;
+  salary_max: number | null;
+  culture_values: string | null;
+  role_description: string | null;
+}
+
+export async function getEmployerProfile(): Promise<EmployerProfile | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await db
+    .from("employers")
+    .select("company_name, role_title, required_skills, location, remote_ok, team_size, salary_min, salary_max, culture_values, role_description")
+    .eq("user_id", user.id)
+    .single();
+
+  if (error || !data) return null;
+  return data as EmployerProfile;
+}
+
+export function formatEmployerProfile(p: EmployerProfile): string {
+  const parts = [`company_name: ${p.company_name}`];
+  if (p.role_title) parts.push(`role_title: ${p.role_title}`);
+  if (p.required_skills?.length) parts.push(`required_skills: [${p.required_skills.join(", ")}]`);
+  if (p.location) parts.push(`location: ${p.location}`);
+  if (p.remote_ok != null) parts.push(`remote_ok: ${p.remote_ok}`);
+  if (p.team_size) parts.push(`team_size: ${p.team_size}`);
+  return parts.join(", ");
+}
+
+export function formatBriefingData(p: Record<string, unknown>): string {
+  return Object.entries(p)
+    .filter(([, v]) => v != null)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(", ");
+}
+
+export async function updateEmployerProfile(updates: Record<string, unknown>): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { error } = await db
+    .from("employers")
+    .update(updates)
+    .eq("user_id", user.id);
+
+  if (error) console.error("Failed to update employer profile:", error);
 }
 
 // ─── Direct DB: Candidate Matches ───────────────────────
@@ -151,7 +258,7 @@ export interface TranscriptLine {
   text: string;
 }
 
-export async function getTranscript(): Promise<TranscriptLine[]> {
+export async function getTranscript(type: "jack" | "jill" = "jack"): Promise<TranscriptLine[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -159,7 +266,7 @@ export async function getTranscript(): Promise<TranscriptLine[]> {
     .from("conversations")
     .select("id")
     .eq("user_id", user.id)
-    .eq("type", "jack")
+    .eq("type", type)
     .order("created_at", { ascending: false })
     .limit(1)
     .single();
@@ -174,12 +281,18 @@ export async function getTranscript(): Promise<TranscriptLine[]> {
 
   if (error || !messages) return [];
 
+  const agentName = type === "jack" ? "Jack" : "Jill";
   return messages
     .filter((m: any) => m.role !== "system")
     .map((m: any) => ({
-      speaker: m.role === "assistant" ? "Jack" : "You",
+      speaker: m.role === "assistant" ? agentName : "You",
       text: m.content,
     }));
+}
+
+export function formatConversationHistory(lines: TranscriptLine[]): string {
+  if (lines.length === 0) return "none";
+  return lines.map((l) => `${l.speaker}: ${l.text}`).join("\n");
 }
 
 // ─── Direct DB: Employer Candidates ─────────────────────

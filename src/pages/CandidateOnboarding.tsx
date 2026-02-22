@@ -1,9 +1,19 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Mic, MicOff, PhoneOff, ArrowRight, Send, MessageSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useScribe, CommitStrategy } from "@elevenlabs/react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  jackGreeting,
+  jackChat,
+  getCandidateProfile,
+  formatCandidateProfile,
+  formatConversationHistory,
+  updateCandidateProfile,
+  type TranscriptLine,
+} from "@/lib/api";
+
 const AudioWaveform = ({ active }: { active: boolean }) => (
   <div className="flex items-center justify-center gap-1 h-16">
     {Array.from({ length: 24 }).map((_, i) => (
@@ -25,26 +35,65 @@ const AudioWaveform = ({ active }: { active: boolean }) => (
   </div>
 );
 
-interface TranscriptLine {
-  speaker: string;
-  text: string;
-}
-
 const CandidateOnboarding = () => {
   const [isMicOn, setIsMicOn] = useState(false);
   const [isActive, setIsActive] = useState(true);
   const [transcriptLines, setTranscriptLines] = useState<TranscriptLine[]>([]);
   const [textInput, setTextInput] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const candidateProfileRef = useRef<string>("none");
   const navigate = useNavigate();
+
+  // Load profile and fetch greeting on mount
+  useEffect(() => {
+    (async () => {
+      const profile = await getCandidateProfile();
+      const profileStr = profile ? formatCandidateProfile(profile) : "none";
+      candidateProfileRef.current = profileStr;
+
+      try {
+        const greeting = await jackGreeting(profileStr);
+        setTranscriptLines([{ speaker: "Jack", text: greeting.message }]);
+      } catch (err) {
+        console.error("Failed to get Jack greeting:", err);
+      }
+    })();
+  }, []);
+
+  const sendToJack = useCallback(async (userMessage: string) => {
+    if (isSending) return;
+    setIsSending(true);
+
+    const updatedLines = [...transcriptLines, { speaker: "You", text: userMessage }];
+    setTranscriptLines(updatedLines);
+
+    try {
+      const history = formatConversationHistory(updatedLines);
+      const result = await jackChat(userMessage, history, candidateProfileRef.current);
+      setTranscriptLines((prev) => [...prev, { speaker: "Jack", text: result.reply }]);
+
+      if (result.profileUpdates) {
+        await updateCandidateProfile(result.profileUpdates);
+        const refreshed = await getCandidateProfile();
+        if (refreshed) {
+          candidateProfileRef.current = formatCandidateProfile(refreshed);
+        }
+      }
+    } catch (err) {
+      console.error("Jack chat error:", err);
+      setTranscriptLines((prev) => [...prev, { speaker: "Jack", text: "Sorry, I had trouble processing that. Could you try again?" }]);
+    } finally {
+      setIsSending(false);
+    }
+  }, [transcriptLines, isSending]);
 
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
     commitStrategy: CommitStrategy.VAD,
     onCommittedTranscript: (data) => {
       if (data.text.trim()) {
-        setTranscriptLines((prev) => [...prev, { speaker: "You", text: data.text.trim() }]);
-        // TODO: send transcribed text to /api/jack/chat
+        sendToJack(data.text.trim());
       }
     },
   });
@@ -76,9 +125,8 @@ const CandidateOnboarding = () => {
 
   const sendTextMessage = () => {
     if (!textInput.trim()) return;
-    setTranscriptLines((prev) => [...prev, { speaker: "You", text: textInput }]);
+    sendToJack(textInput.trim());
     setTextInput("");
-    // TODO: send to /api/jack/chat endpoint
   };
 
   return (
@@ -155,10 +203,12 @@ const CandidateOnboarding = () => {
                 onKeyDown={(e) => e.key === "Enter" && sendTextMessage()}
                 placeholder="Type your message to Jack..."
                 className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none px-3"
+                disabled={isSending}
               />
               <button
                 onClick={sendTextMessage}
-                className="w-10 h-10 rounded-xl bg-jack flex items-center justify-center text-jack-foreground shrink-0 hover:opacity-90 transition-opacity"
+                disabled={isSending}
+                className="w-10 h-10 rounded-xl bg-jack flex items-center justify-center text-jack-foreground shrink-0 hover:opacity-90 transition-opacity disabled:opacity-50"
               >
                 <Send className="w-4 h-4" />
               </button>
@@ -177,7 +227,7 @@ const CandidateOnboarding = () => {
               key={i}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.3 }}
+              transition={{ delay: i * 0.1 }}
               className="flex gap-3"
             >
               <span className={`text-xs font-medium mt-0.5 shrink-0 ${
