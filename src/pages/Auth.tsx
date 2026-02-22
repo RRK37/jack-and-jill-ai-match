@@ -32,9 +32,8 @@ const Auth = () => {
       const { error } = await signUp(email, password, role);
       if (error) {
         setError(error.message);
-      } else {
-        setConfirmationSent(true);
       }
+      // Navigation handled by auth state change → role-based redirect
     } else {
       const { error } = await signIn(email, password);
       if (error) {
