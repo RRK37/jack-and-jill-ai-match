@@ -10,7 +10,7 @@ const Landing = () => {
 
   return (
     <div className={isHiring ? "dark" : ""}>
-      <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
+      <div className={`min-h-screen bg-background text-foreground transition-colors duration-300 ${isHiring ? "font-serif" : ""}`}>
         {/* Nav */}
         <nav className="flex items-center justify-between px-6 md:px-12 py-6 border-b-2 border-border">
           <div className="font-display text-xl font-bold uppercase tracking-tight">
@@ -114,12 +114,12 @@ const Landing = () => {
               /* ── HIRING MODE ── */
               <>
                 <div className="mb-12">
-                  <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-bold uppercase leading-[0.95] mb-6">
+                  <h1 className="font-serif text-5xl md:text-7xl lg:text-8xl font-bold leading-[0.95] mb-6 tracking-tight">
                     Describe.<br />
                     Don't<br />
-                    <span className="text-primary">Search.</span>
+                    <span className="text-primary italic">Search.</span>
                   </h1>
-                  <p className="text-lg md:text-xl max-w-xl leading-relaxed text-muted-foreground">
+                  <p className="text-lg md:text-xl max-w-xl leading-relaxed text-muted-foreground font-serif">
                     Tell Jill about your dream hire in plain language. She curates a shortlist
                     of vetted candidates who actually fit your culture.
                   </p>
@@ -160,10 +160,10 @@ const Landing = () => {
                       className="border-2 border-border p-6 brutal-shadow-accent bg-card"
                     >
                       <f.icon className="w-8 h-8 text-primary mb-4" />
-                      <h3 className="font-display text-lg font-bold uppercase mb-2">
+                      <h3 className="font-serif text-lg font-bold mb-2 tracking-tight">
                         {f.title}
                       </h3>
-                      <p className="text-muted-foreground text-sm leading-relaxed">
+                      <p className="text-muted-foreground text-sm leading-relaxed font-serif">
                         {f.desc}
                       </p>
                     </div>
