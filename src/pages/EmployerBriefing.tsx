@@ -1,18 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Send, Mic, Paperclip } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 type Message = { from: "user" | "jill"; text: string };
 
-const initialMessages: Message[] = [
-  { from: "jill", text: "Hi! I'm Jill, your AI hiring partner. Tell me about the role you're looking to fill—what does your ideal candidate look like?" },
-];
-
 const EmployerBriefing = () => {
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetch("/api/jill/greeting")
+      .then((res) => res.json())
+      .then((data) => setMessages([{ from: "jill", text: data.message }]))
+      .catch(() => {});
+  }, []);
 
   const sendMessage = () => {
     if (!input.trim()) return;

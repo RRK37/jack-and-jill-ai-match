@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Check, X, Sparkles, Filter, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -16,19 +16,24 @@ interface Candidate {
   status: CandidateStatus;
 }
 
-const initialCandidates: Candidate[] = [
-  { id: 1, initials: "SR", name: "Sarah R.", title: "Senior Frontend Engineer", matchSummary: "8 years React/TypeScript, fintech background at Plaid. Strong system design skills.", vibeMatch: "Culture-add: values autonomy, ships fast, mentors juniors", score: 95, status: "pending" },
-  { id: 2, initials: "MK", name: "Marcus K.", title: "Frontend Engineer", matchSummary: "5 years experience, full-stack leaning. Led migration to Next.js at a Series B startup.", vibeMatch: "Collaborative, thrives in small teams, product-minded", score: 89, status: "pending" },
-  { id: 3, initials: "LP", name: "Lisa P.", title: "Staff Engineer", matchSummary: "10+ years, design systems expert. Previous: Stripe, Figma. Strong in accessibility.", vibeMatch: "Meticulous, design-sensitive, strong communicator", score: 87, status: "pending" },
-  { id: 4, initials: "JT", name: "James T.", title: "Senior Frontend Developer", matchSummary: "6 years React, mobile-first expertise. Built consumer apps with 1M+ users.", vibeMatch: "Energetic, user-obsessed, startup DNA", score: 82, status: "pending" },
-];
-
 const EmployerDashboard = () => {
-  const [candidates, setCandidates] = useState(initialCandidates);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetch("/api/employer/candidates")
+      .then((res) => res.json())
+      .then((data) => setCandidates(data))
+      .catch(() => {});
+  }, []);
 
   const updateStatus = (id: number, status: CandidateStatus) => {
     setCandidates((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
+    fetch("/api/employer/candidate-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateId: id, status }),
+    }).catch(() => {});
   };
 
   const statusColors: Record<CandidateStatus, string> = {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Mic, MicOff, PhoneOff, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -24,16 +24,23 @@ const AudioWaveform = ({ active }: { active: boolean }) => (
   </div>
 );
 
+interface TranscriptLine {
+  speaker: string;
+  text: string;
+}
+
 const CandidateOnboarding = () => {
   const [isMicOn, setIsMicOn] = useState(true);
   const [isActive, setIsActive] = useState(true);
+  const [transcriptLines, setTranscriptLines] = useState<TranscriptLine[]>([]);
   const navigate = useNavigate();
 
-  const transcriptLines = [
-    { speaker: "Jack", text: "Hey! I'm Jack, your AI career partner. Tell me—what kind of role are you looking for?" },
-    { speaker: "You", text: "I'm a senior product designer looking for a role at a mission-driven startup." },
-    { speaker: "Jack", text: "Love it. What matters most to you—remote flexibility, team culture, or growth trajectory?" },
-  ];
+  useEffect(() => {
+    fetch("/api/jack/transcript")
+      .then((res) => res.json())
+      .then((data) => setTranscriptLines(data.lines))
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
