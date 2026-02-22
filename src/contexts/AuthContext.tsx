@@ -1,6 +1,10 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
+
+// Cast for untyped table access until schema syncs
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
 
 type UserRole = "candidate" | "employer";
 
@@ -31,7 +35,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (session?.user) {
           // Fetch role from user_roles table
-          const { data } = await supabase
+          const { data } = await db
             .from("user_roles")
             .select("role")
             .eq("user_id", session.user.id)
@@ -51,12 +55,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        supabase
+        db
           .from("user_roles")
           .select("role")
           .eq("user_id", session.user.id)
           .single()
-          .then(({ data }) => {
+          .then(({ data }: any) => {
             setUserRole((data?.role as UserRole) ?? null);
             setLoading(false);
           });

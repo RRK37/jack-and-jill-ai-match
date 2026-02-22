@@ -2,63 +2,59 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, MapPin, Building2, TrendingUp, MessageCircle, X, Send, Briefcase } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-
-interface ProfileData {
-  name: string;
-  title: string;
-  skills: string[];
-  goals: string;
-  vibe: string;
-}
-
-interface MatchedJob {
-  company: string;
-  role: string;
-  location: string;
-  score: number;
-  tags: string[];
-}
+import {
+  getCandidateProfile,
+  getCandidateMatches,
+  jackGreeting,
+  jackChat,
+  type CandidateProfile,
+  type CandidateMatch,
+} from "@/lib/api";
 
 const CandidateDashboard = () => {
-  const [profileData, setProfileData] = useState<ProfileData | null>(null);
-  const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([]);
+  const [profileData, setProfileData] = useState<CandidateProfile | null>(null);
+  const [matchedJobs, setMatchedJobs] = useState<CandidateMatch[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState<{ from: string; text: string }[]>([]);
   const [input, setInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch("/api/candidate/profile")
-      .then((res) => res.json())
-      .then((data) => setProfileData(data))
-      .catch(() => {});
+    getCandidateProfile().then((data) => {
+      if (data) setProfileData(data);
+    });
 
-    fetch("/api/candidate/matches")
-      .then((res) => res.json())
-      .then((data) => setMatchedJobs(data))
-      .catch(() => {});
+    getCandidateMatches().then((data) => setMatchedJobs(data));
 
-    fetch("/api/jack/greeting")
-      .then((res) => res.json())
+    jackGreeting()
       .then((data) => setMessages([{ from: "jack", text: data.message }]))
       .catch(() => {});
   }, []);
 
-  const sendMessage = () => {
-    if (!input.trim()) return;
-    setMessages((prev) => [...prev, { from: "user", text: input }]);
+  const sendMessage = async () => {
+    if (!input.trim() || isSending) return;
+    const userMsg = input;
+    setMessages((prev) => [...prev, { from: "user", text: userMsg }]);
     setInput("");
-    fetch("/api/jack/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: [...messages, { from: "user", text: input }] }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setMessages((prev) => [...prev, { from: "jack", text: data.reply }]);
-      })
-      .catch(() => {});
+    setIsSending(true);
+
+    try {
+      const data = await jackChat(userMsg, "candidate_chat");
+      setMessages((prev) => [...prev, { from: "jack", text: data.reply }]);
+    } catch {
+      setMessages((prev) => [...prev, { from: "jack", text: "Sorry, something went wrong. Try again." }]);
+    } finally {
+      setIsSending(false);
+    }
   };
+
+  const initials = profileData?.name
+    ?.split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2) || "??";
 
   return (
     <div className="min-h-screen bg-background">
@@ -70,7 +66,7 @@ const CandidateDashboard = () => {
         <div className="flex items-center gap-4">
           <span className="text-sm text-muted-foreground">Candidate Portal</span>
           <div className="w-8 h-8 rounded-lg bg-jack-muted flex items-center justify-center">
-            <span className="text-xs font-semibold jack-accent">AC</span>
+            <span className="text-xs font-semibold jack-accent">{initials}</span>
           </div>
         </div>
       </nav>
@@ -85,7 +81,7 @@ const CandidateDashboard = () => {
           >
             <div className="flex flex-col md:flex-row md:items-start gap-6">
               <div className="w-16 h-16 rounded-2xl bg-jack-muted flex items-center justify-center shrink-0">
-                <span className="font-display text-xl font-bold jack-accent">AC</span>
+                <span className="font-display text-xl font-bold jack-accent">{initials}</span>
               </div>
               <div className="flex-1">
                 <h1 className="font-display text-2xl font-bold mb-1">{profileData.name}</h1>
@@ -131,7 +127,7 @@ const CandidateDashboard = () => {
           <div className="grid gap-4">
             {matchedJobs.map((job, i) => (
               <motion.div
-                key={job.company}
+                key={`${job.company}-${job.role}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 + i * 0.08 }}
@@ -226,10 +222,12 @@ const CandidateDashboard = () => {
                     onKeyDown={(e) => e.key === "Enter" && sendMessage()}
                     placeholder="Ask Jack anything..."
                     className="flex-1 bg-secondary rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-jack/30"
+                    disabled={isSending}
                   />
                   <button
                     onClick={sendMessage}
-                    className="w-10 h-10 rounded-xl bg-jack flex items-center justify-center text-jack-foreground shrink-0"
+                    disabled={isSending}
+                    className="w-10 h-10 rounded-xl bg-jack flex items-center justify-center text-jack-foreground shrink-0 disabled:opacity-50"
                   >
                     <Send className="w-4 h-4" />
                   </button>

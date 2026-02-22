@@ -2,38 +2,30 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Check, X, Sparkles, Filter, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import {
+  getEmployerCandidates,
+  updateCandidateStatus,
+  type EmployerCandidate,
+} from "@/lib/api";
 
 type CandidateStatus = "pending" | "approved" | "passed";
 
-interface Candidate {
-  id: number;
-  initials: string;
-  name: string;
-  title: string;
-  matchSummary: string;
-  vibeMatch: string;
-  score: number;
-  status: CandidateStatus;
-}
-
 const EmployerDashboard = () => {
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [candidates, setCandidates] = useState<EmployerCandidate[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch("/api/employer/candidates")
-      .then((res) => res.json())
-      .then((data) => setCandidates(data))
-      .catch(() => {});
+    getEmployerCandidates().then((data) => setCandidates(data));
   }, []);
 
-  const updateStatus = (id: number, status: CandidateStatus) => {
-    setCandidates((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
-    fetch("/api/employer/candidate-status", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ candidateId: id, status }),
-    }).catch(() => {});
+  const handleStatusUpdate = async (matchId: string, status: CandidateStatus) => {
+    setCandidates((prev) => prev.map((c) => (c.id === matchId ? { ...c, status } : c)));
+    try {
+      await updateCandidateStatus(matchId, status);
+    } catch {
+      // Revert on error
+      setCandidates((prev) => prev.map((c) => (c.id === matchId ? { ...c, status: "pending" } : c)));
+    }
   };
 
   const statusColors: Record<CandidateStatus, string> = {
@@ -57,7 +49,6 @@ const EmployerDashboard = () => {
       </nav>
 
       <div className="max-w-5xl mx-auto px-6 py-8">
-        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -69,7 +60,6 @@ const EmployerDashboard = () => {
           </p>
         </motion.div>
 
-        {/* Filters */}
         <div className="flex items-center gap-3 mb-6">
           <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-secondary text-sm text-secondary-foreground hover:bg-accent transition-colors">
             <Filter className="w-3.5 h-3.5" /> Filter
@@ -82,7 +72,6 @@ const EmployerDashboard = () => {
           </div>
         </div>
 
-        {/* Candidate Cards */}
         <div className="grid gap-4">
           {candidates.map((candidate, i) => (
             <motion.div
@@ -95,7 +84,6 @@ const EmployerDashboard = () => {
               }`}
             >
               <div className="flex flex-col md:flex-row md:items-start gap-5">
-                {/* Avatar + Score */}
                 <div className="flex items-center gap-4 md:flex-col md:items-center md:gap-2 shrink-0">
                   <div className="w-14 h-14 rounded-2xl bg-jill-muted flex items-center justify-center">
                     <span className="font-display text-lg font-bold jill-accent">{candidate.initials}</span>
@@ -106,7 +94,6 @@ const EmployerDashboard = () => {
                   </div>
                 </div>
 
-                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-semibold text-lg">{candidate.name}</h3>
@@ -119,18 +106,17 @@ const EmployerDashboard = () => {
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex md:flex-col gap-2 shrink-0">
                   {candidate.status === "pending" ? (
                     <>
                       <button
-                        onClick={() => updateStatus(candidate.id, "approved")}
+                        onClick={() => handleStatusUpdate(candidate.id, "approved")}
                         className="flex items-center gap-2 px-4 py-2 rounded-xl bg-jill text-jill-foreground text-sm font-medium hover:opacity-90 transition-opacity"
                       >
                         <Check className="w-4 h-4" /> Approve
                       </button>
                       <button
-                        onClick={() => updateStatus(candidate.id, "passed")}
+                        onClick={() => handleStatusUpdate(candidate.id, "passed")}
                         className="flex items-center gap-2 px-4 py-2 rounded-xl bg-secondary text-muted-foreground text-sm hover:bg-accent transition-colors"
                       >
                         <X className="w-4 h-4" /> Pass
