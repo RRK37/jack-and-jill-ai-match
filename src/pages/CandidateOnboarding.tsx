@@ -1,9 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Mic, MicOff, PhoneOff, ArrowRight, Send, MessageSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useScribe, CommitStrategy } from "@elevenlabs/react";
-import { supabase } from "@/lib/supabase";
 
 const AudioWaveform = ({ active }: { active: boolean }) => (
   <div className="flex items-center justify-center gap-1 h-16">
@@ -32,55 +30,12 @@ interface TranscriptLine {
 }
 
 const CandidateOnboarding = () => {
-  const [isMicOn, setIsMicOn] = useState(false);
+  const [isMicOn, setIsMicOn] = useState(true);
   const [isActive, setIsActive] = useState(true);
   const [transcriptLines, setTranscriptLines] = useState<TranscriptLine[]>([]);
   const [textInput, setTextInput] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
-  const [partialText, setPartialText] = useState("");
   const navigate = useNavigate();
-
-  // ElevenLabs realtime STT
-  const scribe = useScribe({
-    modelId: "scribe_v2_realtime",
-    commitStrategy: CommitStrategy.VAD,
-    onPartialTranscript: (data) => {
-      setPartialText(data.text);
-    },
-    onCommittedTranscript: (data) => {
-      if (data.text.trim()) {
-        setTranscriptLines((prev) => [...prev, { speaker: "You", text: data.text.trim() }]);
-        // TODO: send to /api/jack/chat endpoint
-      }
-      setPartialText("");
-    },
-  });
-
-  const toggleMic = useCallback(async () => {
-    if (scribe.isConnected) {
-      scribe.disconnect();
-      setIsMicOn(false);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase.functions.invoke("elevenlabs-scribe-token");
-      if (error || !data?.token) {
-        console.error("Failed to get scribe token:", error);
-        return;
-      }
-      await scribe.connect({
-        token: data.token,
-        microphone: {
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      });
-      setIsMicOn(true);
-    } catch (err) {
-      console.error("STT connection error:", err);
-    }
-  }, [scribe]);
 
   const sendTextMessage = () => {
     if (!textInput.trim()) return;
@@ -88,6 +43,13 @@ const CandidateOnboarding = () => {
     setTextInput("");
     // TODO: send to /api/jack/chat endpoint
   };
+
+  useEffect(() => {
+    fetch("/api/jack/transcript")
+      .then((res) => res.json())
+      .then((data) => setTranscriptLines(data.lines))
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -126,7 +88,7 @@ const CandidateOnboarding = () => {
         {/* Controls */}
         <div className="flex items-center gap-4 mb-10">
           <button
-            onClick={toggleMic}
+            onClick={() => setIsMicOn(!isMicOn)}
             className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
               isMicOn ? "bg-jack-muted jack-accent" : "bg-secondary text-muted-foreground"
             }`}
@@ -142,7 +104,7 @@ const CandidateOnboarding = () => {
             <MessageSquare className="w-5 h-5" />
           </button>
           <button
-            onClick={() => { setIsActive(false); scribe.disconnect(); navigate("/candidate/dashboard"); }}
+            onClick={() => { setIsActive(false); navigate("/candidate/dashboard"); }}
             className="w-14 h-14 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center hover:bg-destructive/20 transition-all"
           >
             <PhoneOff className="w-5 h-5" />
@@ -193,13 +155,6 @@ const CandidateOnboarding = () => {
               <p className="text-sm text-muted-foreground leading-relaxed">{line.text}</p>
             </motion.div>
           ))}
-          {/* Partial (live) transcript */}
-          {partialText && (
-            <div className="flex gap-3 opacity-60">
-              <span className="text-xs font-medium mt-0.5 shrink-0 text-foreground">You</span>
-              <p className="text-sm text-muted-foreground leading-relaxed italic">{partialText}</p>
-            </div>
-          )}
         </div>
 
         {/* Skip */}
