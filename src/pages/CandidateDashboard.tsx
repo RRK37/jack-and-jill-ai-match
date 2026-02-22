@@ -7,8 +7,12 @@ import {
   getCandidateMatches,
   jackGreeting,
   jackChat,
+  formatCandidateProfile,
+  formatConversationHistory,
+  updateCandidateProfile,
   type CandidateProfile,
   type CandidateMatch,
+  type TranscriptLine,
 } from "@/lib/api";
 
 const CandidateDashboard = () => {
@@ -22,26 +26,42 @@ const CandidateDashboard = () => {
 
   useEffect(() => {
     getCandidateProfile().then((data) => {
-      if (data) setProfileData(data);
+      if (data) {
+        setProfileData(data);
+        jackGreeting(formatCandidateProfile(data))
+          .then((d) => setMessages([{ from: "jack", text: d.message }]))
+          .catch(() => {});
+      } else {
+        jackGreeting()
+          .then((d) => setMessages([{ from: "jack", text: d.message }]))
+          .catch(() => {});
+      }
     });
 
     getCandidateMatches().then((data) => setMatchedJobs(data));
-
-    jackGreeting()
-      .then((data) => setMessages([{ from: "jack", text: data.message }]))
-      .catch(() => {});
   }, []);
 
   const sendMessage = async () => {
     if (!input.trim() || isSending) return;
     const userMsg = input;
-    setMessages((prev) => [...prev, { from: "user", text: userMsg }]);
+    const newMessages = [...messages, { from: "user", text: userMsg }];
+    setMessages(newMessages);
     setInput("");
     setIsSending(true);
 
     try {
-      const data = await jackChat(userMsg, "candidate_chat");
+      const history = newMessages.map((m) => ({
+        speaker: m.from === "jack" ? "Jack" : "You",
+        text: m.text,
+      }));
+      const profileStr = profileData ? formatCandidateProfile(profileData) : "none";
+      const data = await jackChat(userMsg, formatConversationHistory(history), profileStr);
       setMessages((prev) => [...prev, { from: "jack", text: data.reply }]);
+      if (data.profileUpdates) {
+        await updateCandidateProfile(data.profileUpdates);
+        const refreshed = await getCandidateProfile();
+        if (refreshed) setProfileData(refreshed);
+      }
     } catch {
       setMessages((prev) => [...prev, { from: "jack", text: "Sorry, something went wrong. Try again." }]);
     } finally {

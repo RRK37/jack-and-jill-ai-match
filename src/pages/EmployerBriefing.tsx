@@ -1,8 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Send, Mic, Paperclip } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { jillGreeting, jillChat } from "@/lib/api";
+import {
+  jillGreeting,
+  jillChat,
+  getEmployerProfile,
+  formatEmployerProfile,
+  formatBriefingData,
+  formatConversationHistory,
+  updateEmployerProfile,
+} from "@/lib/api";
 
 type Message = { from: "user" | "jill"; text: string };
 
@@ -10,24 +18,51 @@ const EmployerBriefing = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const employerProfileRef = useRef<string>("none");
+  const briefingDataRef = useRef<Record<string, unknown>>({});
   const navigate = useNavigate();
 
   useEffect(() => {
-    jillGreeting()
-      .then((data) => setMessages([{ from: "jill", text: data.message }]))
-      .catch(() => {});
+    (async () => {
+      const profile = await getEmployerProfile();
+      const profileStr = profile ? formatEmployerProfile(profile) : "none";
+      employerProfileRef.current = profileStr;
+
+      try {
+        const data = await jillGreeting(profileStr);
+        setMessages([{ from: "jill", text: data.message }]);
+      } catch {
+        // silent
+      }
+    })();
   }, []);
 
   const sendMessage = async () => {
     if (!input.trim() || isSending) return;
     const userMsg = input;
-    setMessages((prev) => [...prev, { from: "user", text: userMsg }]);
+    const newMessages: Message[] = [...messages, { from: "user", text: userMsg }];
+    setMessages(newMessages);
     setInput("");
     setIsSending(true);
 
     try {
-      const data = await jillChat(userMsg);
+      const history = newMessages.map((m) => ({
+        speaker: m.from === "jill" ? "Jill" : "You",
+        text: m.text,
+      }));
+      const data = await jillChat(
+        userMsg,
+        formatConversationHistory(history),
+        employerProfileRef.current,
+        formatBriefingData(briefingDataRef.current)
+      );
       setMessages((prev) => [...prev, { from: "jill", text: data.reply }]);
+
+      if (data.briefingData) {
+        briefingDataRef.current = { ...briefingDataRef.current, ...data.briefingData };
+        await updateEmployerProfile(data.briefingData);
+      }
+
       if (data.briefingComplete) {
         setTimeout(() => navigate("/employer/dashboard"), 1500);
       }
