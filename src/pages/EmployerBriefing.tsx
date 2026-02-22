@@ -20,14 +20,19 @@ const EmployerBriefing = () => {
     setMessages((prev) => [...prev, { from: "user", text: userMsg }]);
     setInput("");
 
-    setTimeout(() => {
-      if (messages.length < 3) {
-        setMessages((prev) => [...prev, { from: "jill", text: "Great—a Senior Frontend Engineer for your fintech startup. What's the team size and tech stack? And how important is remote flexibility?" }]);
-      } else {
-        setMessages((prev) => [...prev, { from: "jill", text: "Perfect, I have a clear picture now. I'll start curating your shortlist. You can review candidates on your dashboard whenever you're ready." }]);
-        setTimeout(() => navigate("/employer/dashboard"), 2000);
-      }
-    }, 1200);
+    fetch("/api/jill/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: [...messages, { from: "user", text: userMsg }] }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setMessages((prev) => [...prev, { from: "jill", text: data.reply }]);
+        if (data.briefingComplete) {
+          navigate("/employer/dashboard");
+        }
+      })
+      .catch(() => {});
   };
 
   return (

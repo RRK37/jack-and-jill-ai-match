@@ -30,9 +30,16 @@ const CandidateDashboard = () => {
     if (!input.trim()) return;
     setMessages((prev) => [...prev, { from: "user", text: input }]);
     setInput("");
-    setTimeout(() => {
-      setMessages((prev) => [...prev, { from: "jack", text: "Great question! I'd recommend highlighting your design systems experience—Notion specifically mentioned that in their brief." }]);
-    }, 1000);
+    fetch("/api/jack/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: [...messages, { from: "user", text: input }] }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setMessages((prev) => [...prev, { from: "jack", text: data.reply }]);
+      })
+      .catch(() => {});
   };
 
   return (
