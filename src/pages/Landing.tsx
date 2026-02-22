@@ -1,136 +1,195 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Sparkles, Users, Mic } from "lucide-react";
+import { ArrowRight, Mic, Users, Zap, Clock, Star } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const Landing = () => {
   const navigate = useNavigate();
+  const [mode, setMode] = useState<"jobs" | "hiring">("jobs");
+  const isHiring = mode === "hiring";
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Subtle grid background */}
-      <div className="absolute inset-0 bg-[linear-gradient(hsl(220_14%_12%/_0.5)_1px,transparent_1px),linear-gradient(90deg,hsl(220_14%_12%/_0.5)_1px,transparent_1px)] bg-[size:64px_64px]" />
-      
-      {/* Glow orbs */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-jack/5 rounded-full blur-3xl" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-jill/5 rounded-full blur-3xl" />
-
-      <div className="relative z-10">
+    <div className={isHiring ? "dark" : ""}>
+      <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
         {/* Nav */}
-        <nav className="flex items-center justify-between px-6 md:px-12 py-6">
-          <div className="font-display text-xl font-bold tracking-tight">
-            Jack <span className="text-muted-foreground">&</span> Jill
+        <nav className="flex items-center justify-between px-6 md:px-12 py-6 border-b-2 border-border">
+          <div className="font-display text-xl font-bold uppercase tracking-tight">
+            Jack & Jill
           </div>
-          <div className="flex items-center gap-4">
+
+          {/* Toggle */}
+          <div className="flex items-center border-2 border-border brutal-shadow">
             <button
-              onClick={() => navigate("/candidate/onboarding")}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setMode("jobs")}
+              className={`px-5 py-2 text-sm font-display font-bold uppercase tracking-wider transition-colors ${
+                !isHiring
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-background text-foreground hover:bg-muted"
+              }`}
             >
-              For Candidates
+              Find Jobs
             </button>
             <button
-              onClick={() => navigate("/employer/briefing")}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setMode("hiring")}
+              className={`px-5 py-2 text-sm font-display font-bold uppercase tracking-wider transition-colors ${
+                isHiring
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-background text-foreground hover:bg-muted"
+              }`}
             >
-              For Employers
+              Hiring
             </button>
           </div>
         </nav>
 
         {/* Hero */}
-        <main className="px-6 md:px-12 pt-20 md:pt-32 pb-20 max-w-6xl mx-auto">
+        <main className="px-6 md:px-12 pt-16 md:pt-24 pb-20 max-w-6xl mx-auto">
           <motion.div
+            key={mode}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
+            transition={{ duration: 0.4 }}
           >
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-border/60 bg-secondary/50 text-sm text-muted-foreground mb-8">
-              <Sparkles className="w-3.5 h-3.5" />
-              AI-powered recruiting, reimagined
-            </div>
-            <h1 className="font-display text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] mb-6">
-              Recruiting that feels
-              <br />
-              like a <span className="text-gradient-jack">conversation</span>,
-              <br />
-              not a <span className="text-muted-foreground">transaction</span>.
-            </h1>
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Meet Jack and Jill—your AI recruiting partners who understand the
-              human side of hiring. Talk, don't type. Connect, don't apply.
-            </p>
+            {!isHiring ? (
+              /* ── FIND JOBS MODE ── */
+              <>
+                <div className="mb-12">
+                  <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-bold uppercase leading-[0.95] mb-6">
+                    Talk.<br />
+                    Don't<br />
+                    <span className="text-primary">Apply.</span>
+                  </h1>
+                  <p className="text-lg md:text-xl max-w-xl leading-relaxed text-muted-foreground">
+                    Have a real conversation about your career. No forms, no uploads—just talk.
+                    Jack finds opportunities that match your vibe.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4 mb-20">
+                  <button
+                    onClick={() => navigate("/candidate/onboarding")}
+                    className="brutal-btn bg-primary text-primary-foreground px-8 py-4 text-lg flex items-center gap-3"
+                  >
+                    <Mic className="w-5 h-5" />
+                    Start talking to Jack
+                    <ArrowRight className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Feature cards */}
+                <div className="grid md:grid-cols-3 gap-6">
+                  {[
+                    {
+                      icon: Mic,
+                      title: "Voice-first",
+                      desc: "Talk naturally about what you want. No keyword-stuffed resumes.",
+                    },
+                    {
+                      icon: Zap,
+                      title: "10x faster",
+                      desc: "Skip the application black hole. Get matched in days, not months.",
+                    },
+                    {
+                      icon: Star,
+                      title: "94% satisfaction",
+                      desc: "Candidates love it. Because it actually works.",
+                    },
+                  ].map((f) => (
+                    <div
+                      key={f.title}
+                      className="border-2 border-border p-6 brutal-shadow bg-card"
+                    >
+                      <f.icon className="w-8 h-8 text-primary mb-4" />
+                      <h3 className="font-display text-lg font-bold uppercase mb-2">
+                        {f.title}
+                      </h3>
+                      <p className="text-muted-foreground text-sm leading-relaxed">
+                        {f.desc}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              /* ── HIRING MODE ── */
+              <>
+                <div className="mb-12">
+                  <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-bold uppercase leading-[0.95] mb-6">
+                    Describe.<br />
+                    Don't<br />
+                    <span className="text-primary">Search.</span>
+                  </h1>
+                  <p className="text-lg md:text-xl max-w-xl leading-relaxed text-muted-foreground">
+                    Tell Jill about your dream hire in plain language. She curates a shortlist
+                    of vetted candidates who actually fit your culture.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4 mb-20">
+                  <button
+                    onClick={() => navigate("/employer/briefing")}
+                    className="brutal-btn bg-primary text-primary-foreground px-8 py-4 text-lg flex items-center gap-3"
+                  >
+                    <Users className="w-5 h-5" />
+                    Brief your role to Jill
+                    <ArrowRight className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Feature cards */}
+                <div className="grid md:grid-cols-3 gap-6">
+                  {[
+                    {
+                      icon: Users,
+                      title: "Culture match",
+                      desc: "Not just skills. Jill understands team dynamics and vibe.",
+                    },
+                    {
+                      icon: Clock,
+                      title: "3-day shortlist",
+                      desc: "From briefing to vetted candidates in 72 hours.",
+                    },
+                    {
+                      icon: Zap,
+                      title: "Zero noise",
+                      desc: "No more sifting through hundreds of unqualified applicants.",
+                    },
+                  ].map((f) => (
+                    <div
+                      key={f.title}
+                      className="border-2 border-border p-6 brutal-shadow-accent bg-card"
+                    >
+                      <f.icon className="w-8 h-8 text-primary mb-4" />
+                      <h3 className="font-display text-lg font-bold uppercase mb-2">
+                        {f.title}
+                      </h3>
+                      <p className="text-muted-foreground text-sm leading-relaxed">
+                        {f.desc}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </motion.div>
 
-          {/* Split CTAs */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto"
-          >
-            {/* Jack CTA */}
-            <button
-              onClick={() => navigate("/candidate/onboarding")}
-              className="group relative glass-card p-8 text-left hover:border-jack/30 transition-all duration-300 jack-glow hover:scale-[1.02]"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-jack-muted flex items-center justify-center">
-                  <Mic className="w-6 h-6 jack-accent" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">For Candidates</p>
-                  <h3 className="font-display text-xl font-semibold">Talk to Jack</h3>
-                </div>
-              </div>
-              <p className="text-muted-foreground text-sm leading-relaxed mb-6">
-                Have a real conversation about your career goals. No forms, no uploads—just talk. Jack finds opportunities that match your vibe.
-              </p>
-              <div className="flex items-center gap-2 jack-accent text-sm font-medium group-hover:gap-3 transition-all">
-                Start a conversation <ArrowRight className="w-4 h-4" />
-              </div>
-            </button>
-
-            {/* Jill CTA */}
-            <button
-              onClick={() => navigate("/employer/briefing")}
-              className="group relative glass-card p-8 text-left hover:border-jill/30 transition-all duration-300 jill-glow hover:scale-[1.02]"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-jill-muted flex items-center justify-center">
-                  <Users className="w-6 h-6 jill-accent" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">For Employers</p>
-                  <h3 className="font-display text-xl font-semibold">Meet Jill</h3>
-                </div>
-              </div>
-              <p className="text-muted-foreground text-sm leading-relaxed mb-6">
-                Describe your dream hire in plain language. Jill curates a shortlist of vetted candidates who actually fit your culture.
-              </p>
-              <div className="flex items-center gap-2 jill-accent text-sm font-medium group-hover:gap-3 transition-all">
-                Brief your role <ArrowRight className="w-4 h-4" />
-              </div>
-            </button>
-          </motion.div>
-
-          {/* Stats */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.5 }}
-            className="flex flex-wrap justify-center gap-12 mt-20 text-center"
-          >
+          {/* Stats bar */}
+          <div className="mt-20 border-t-2 border-border pt-10 flex flex-wrap justify-between gap-8">
             {[
               { value: "10x", label: "Faster than traditional hiring" },
               { value: "94%", label: "Candidate satisfaction" },
               { value: "3 days", label: "Average time to shortlist" },
             ].map((stat) => (
               <div key={stat.label}>
-                <p className="font-display text-3xl font-bold">{stat.value}</p>
-                <p className="text-sm text-muted-foreground mt-1">{stat.label}</p>
+                <p className="font-display text-4xl md:text-5xl font-bold text-primary">
+                  {stat.value}
+                </p>
+                <p className="text-sm text-muted-foreground mt-1 uppercase tracking-wider">
+                  {stat.label}
+                </p>
               </div>
             ))}
-          </motion.div>
+          </div>
         </main>
       </div>
     </div>

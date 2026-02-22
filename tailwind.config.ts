@@ -15,7 +15,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ["Inter", "sans-serif"],
-        display: ["Space Grotesk", "sans-serif"],
+        display: ["Space Mono", "monospace"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -86,31 +86,10 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
-        "pulse-ring": {
-          "0%": { transform: "scale(0.9)", opacity: "0.7" },
-          "50%": { transform: "scale(1.1)", opacity: "0.3" },
-          "100%": { transform: "scale(0.9)", opacity: "0.7" },
-        },
-        "waveform": {
-          "0%, 100%": { height: "8px" },
-          "50%": { height: "32px" },
-        },
-        "float": {
-          "0%, 100%": { transform: "translateY(0px)" },
-          "50%": { transform: "translateY(-6px)" },
-        },
-        "fade-in": {
-          "0%": { opacity: "0", transform: "translateY(10px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
-        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "pulse-ring": "pulse-ring 2s ease-in-out infinite",
-        "waveform": "waveform 1s ease-in-out infinite",
-        "float": "float 3s ease-in-out infinite",
-        "fade-in": "fade-in 0.5s ease-out forwards",
       },
     },
   },
