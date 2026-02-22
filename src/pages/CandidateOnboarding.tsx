@@ -129,6 +129,11 @@ const CandidateOnboarding = () => {
 
   const toggleMic = useCallback(async () => {
     if (scribe.isConnected) {
+      // Send any buffered partial transcript before disconnecting
+      const pending = scribe.partialTranscript?.trim();
+      if (pending) {
+        sendToJackRef.current(pending);
+      }
       scribe.disconnect();
       setIsMicOn(false);
     } else {
