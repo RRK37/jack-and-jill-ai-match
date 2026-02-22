@@ -2,40 +2,40 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Send, Mic, Paperclip } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { jillGreeting, jillChat } from "@/lib/api";
 
 type Message = { from: "user" | "jill"; text: string };
 
 const EmployerBriefing = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch("/api/jill/greeting")
-      .then((res) => res.json())
+    jillGreeting()
       .then((data) => setMessages([{ from: "jill", text: data.message }]))
       .catch(() => {});
   }, []);
 
-  const sendMessage = () => {
-    if (!input.trim()) return;
+  const sendMessage = async () => {
+    if (!input.trim() || isSending) return;
     const userMsg = input;
     setMessages((prev) => [...prev, { from: "user", text: userMsg }]);
     setInput("");
+    setIsSending(true);
 
-    fetch("/api/jill/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: [...messages, { from: "user", text: userMsg }] }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setMessages((prev) => [...prev, { from: "jill", text: data.reply }]);
-        if (data.briefingComplete) {
-          navigate("/employer/dashboard");
-        }
-      })
-      .catch(() => {});
+    try {
+      const data = await jillChat(userMsg);
+      setMessages((prev) => [...prev, { from: "jill", text: data.reply }]);
+      if (data.briefingComplete) {
+        setTimeout(() => navigate("/employer/dashboard"), 1500);
+      }
+    } catch {
+      setMessages((prev) => [...prev, { from: "jill", text: "Sorry, something went wrong. Try again." }]);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -48,7 +48,6 @@ const EmployerBriefing = () => {
       </nav>
 
       <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full">
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-8 space-y-4">
           {messages.map((msg, i) => (
             <motion.div
@@ -74,7 +73,6 @@ const EmployerBriefing = () => {
           ))}
         </div>
 
-        {/* Input */}
         <div className="p-4 border-t border-border/50">
           <div className="flex items-center gap-2 glass-card p-2 rounded-2xl">
             <button className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
@@ -86,13 +84,15 @@ const EmployerBriefing = () => {
               onKeyDown={(e) => e.key === "Enter" && sendMessage()}
               placeholder="Describe your ideal hire..."
               className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+              disabled={isSending}
             />
             <button className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
               <Mic className="w-4 h-4" />
             </button>
             <button
               onClick={sendMessage}
-              className="w-10 h-10 rounded-xl bg-jill flex items-center justify-center text-jill-foreground shrink-0 hover:opacity-90 transition-opacity"
+              disabled={isSending}
+              className="w-10 h-10 rounded-xl bg-jill flex items-center justify-center text-jill-foreground shrink-0 hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               <Send className="w-4 h-4" />
             </button>
