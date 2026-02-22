@@ -15,6 +15,13 @@ function stripCodeFence(raw: string): string {
 }
 
 async function engineCall(slug: string, data: Record<string, string>): Promise<string> {
+  // Chat endpoints use streaming to avoid platform timeouts
+  const isChat = slug.includes("chat");
+
+  if (isChat) {
+    return engineCallStream(slug, data);
+  }
+
   const { data: result, error } = await supabase.functions.invoke("engine-proxy", {
     body: { slug, data },
   });
@@ -22,6 +29,60 @@ async function engineCall(slug: string, data: Record<string, string>): Promise<s
   if (error) throw new ApiError(500, error.message);
   if (result?.error) throw new ApiError(500, result.error);
   return result.content as string;
+}
+
+async function engineCallStream(slug: string, data: Record<string, string>): Promise<string> {
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/engine-proxy`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      },
+      body: JSON.stringify({ slug, data, stream: true }),
+    }
+  );
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new ApiError(response.status, err);
+  }
+
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let tokenContent: string | null = null;
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      try {
+        const event = JSON.parse(line.slice(6));
+        if (event.type === "token") {
+          tokenContent = event.content;
+        }
+        if (event.type === "error") {
+          throw new ApiError(500, event.content);
+        }
+      } catch (e) {
+        if (e instanceof ApiError) throw e;
+      }
+    }
+  }
+
+  if (tokenContent === null) {
+    throw new ApiError(502, "No token event received from engine");
+  }
+  return tokenContent;
 }
 
 export class ApiError extends Error {
