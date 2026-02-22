@@ -3,7 +3,10 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import Landing from "./pages/Landing";
+import Auth from "./pages/Auth";
 import CandidateOnboarding from "./pages/CandidateOnboarding";
 import CandidateDashboard from "./pages/CandidateDashboard";
 import EmployerBriefing from "./pages/EmployerBriefing";
@@ -18,14 +21,17 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/candidate/onboarding" element={<CandidateOnboarding />} />
-          <Route path="/candidate/dashboard" element={<CandidateDashboard />} />
-          <Route path="/employer/briefing" element={<EmployerBriefing />} />
-          <Route path="/employer/dashboard" element={<EmployerDashboard />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/candidate/onboarding" element={<ProtectedRoute><CandidateOnboarding /></ProtectedRoute>} />
+            <Route path="/candidate/dashboard" element={<ProtectedRoute><CandidateDashboard /></ProtectedRoute>} />
+            <Route path="/employer/briefing" element={<ProtectedRoute><EmployerBriefing /></ProtectedRoute>} />
+            <Route path="/employer/dashboard" element={<ProtectedRoute><EmployerDashboard /></ProtectedRoute>} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
