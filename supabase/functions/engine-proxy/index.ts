@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { slug, data } = await req.json();
+    const { slug, data, stream } = await req.json();
 
     if (!slug || !data) {
       return new Response(JSON.stringify({ error: "Missing slug or data" }), {
@@ -29,17 +29,33 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Call the Railway engine with SSE
-    const engineRes = await fetch(`${ENGINE_URL}/run/${slug}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": apiKey,
-      },
-      body: JSON.stringify({ data }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120_000);
+
+    let engineRes: Response;
+    try {
+      engineRes = await fetch(`${ENGINE_URL}/run/${slug}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify({ data }),
+        signal: controller.signal,
+      });
+    } catch (e) {
+      clearTimeout(timeout);
+      const msg = e instanceof Error && e.name === "AbortError"
+        ? "Request to engine timed out"
+        : String(e);
+      return new Response(JSON.stringify({ error: msg }), {
+        status: 504,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (!engineRes.ok) {
+      clearTimeout(timeout);
       const errText = await engineRes.text();
       return new Response(JSON.stringify({ error: errText }), {
         status: engineRes.status,
@@ -47,7 +63,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Parse SSE stream and extract the token event
+    // Stream mode: pass the SSE stream through to keep the connection alive
+    if (stream) {
+      clearTimeout(timeout);
+      return new Response(engineRes.body, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        },
+      });
+    }
+
+    // Non-stream: buffer and extract the token event (original behavior)
     const reader = engineRes.body!.getReader();
     const decoder = new TextDecoder();
     let tokenContent: string | null = null;
@@ -59,7 +88,7 @@ Deno.serve(async (req) => {
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
-      buffer = lines.pop() || ""; // keep incomplete line in buffer
+      buffer = lines.pop() || "";
 
       for (const line of lines) {
         if (!line.startsWith("data: ")) continue;
@@ -69,6 +98,7 @@ Deno.serve(async (req) => {
             tokenContent = event.content;
           }
           if (event.type === "error") {
+            clearTimeout(timeout);
             return new Response(JSON.stringify({ error: event.content }), {
               status: 500,
               headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -79,6 +109,8 @@ Deno.serve(async (req) => {
         }
       }
     }
+
+    clearTimeout(timeout);
 
     if (tokenContent === null) {
       return new Response(JSON.stringify({ error: "No token event received from engine" }), {
