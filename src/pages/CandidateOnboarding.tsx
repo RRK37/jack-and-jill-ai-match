@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Mic, MicOff, PhoneOff, ArrowRight, Send, MessageSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useScribe, CommitStrategy } from "@elevenlabs/react";
+import { supabase } from "@/integrations/supabase/client";
 const AudioWaveform = ({ active }: { active: boolean }) => (
   <div className="flex items-center justify-center gap-1 h-16">
     {Array.from({ length: 24 }).map((_, i) => (
@@ -53,15 +54,23 @@ const CandidateOnboarding = () => {
       scribe.disconnect();
       setIsMicOn(false);
     } else {
-      const apiKey = "sk_2429e7f6cb06a59b0baaafa4e40d629f9fe3cf672b121b54";
-      await scribe.connect({
-        token: apiKey,
-        microphone: {
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      });
-      setIsMicOn(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("elevenlabs-scribe-token");
+        if (error || !data?.token) {
+          console.error("Failed to get scribe token:", error);
+          return;
+        }
+        await scribe.connect({
+          token: data.token,
+          microphone: {
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        });
+        setIsMicOn(true);
+      } catch (err) {
+        console.error("Failed to connect scribe:", err);
+      }
     }
   }, [scribe]);
 
