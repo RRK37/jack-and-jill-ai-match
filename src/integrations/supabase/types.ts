@@ -277,6 +277,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_employer_match: {
+        Args: { _candidate_id: string; _employer_user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "candidate" | "employer" | "admin"
