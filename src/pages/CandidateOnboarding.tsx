@@ -272,12 +272,17 @@ const CandidateOnboarding = () => {
               <p className="text-sm text-muted-foreground leading-relaxed">{line.text}</p>
             </motion.div>
           ))}
-          {scribe.partialTranscript && (
-            <div className="flex gap-3 opacity-60">
-              <span className="text-xs font-medium mt-0.5 shrink-0 text-foreground">You</span>
-              <p className="text-sm text-muted-foreground leading-relaxed italic">{scribe.partialTranscript}…</p>
-            </div>
-          )}
+          {scribe.partialTranscript && isMicOn && (() => {
+            const lastUserLine = [...transcriptLines].reverse().find(l => l.speaker === "You");
+            const isDuplicate = lastUserLine && scribe.partialTranscript.trim() === lastUserLine.text;
+            if (isDuplicate) return null;
+            return (
+              <div className="flex gap-3 opacity-60">
+                <span className="text-xs font-medium mt-0.5 shrink-0 text-foreground">You</span>
+                <p className="text-sm text-muted-foreground leading-relaxed italic">{scribe.partialTranscript}…</p>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Skip */}
