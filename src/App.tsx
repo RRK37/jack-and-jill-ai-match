@@ -11,6 +11,7 @@ import CandidateOnboarding from "./pages/CandidateOnboarding";
 import CandidateDashboard from "./pages/CandidateDashboard";
 import EmployerBriefing from "./pages/EmployerBriefing";
 import EmployerDashboard from "./pages/EmployerDashboard";
+import DemoEmployerDashboard from "./pages/DemoEmployerDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
             <Route path="/candidate/dashboard" element={<ProtectedRoute><CandidateDashboard /></ProtectedRoute>} />
             <Route path="/employer/briefing" element={<ProtectedRoute><EmployerBriefing /></ProtectedRoute>} />
             <Route path="/employer/dashboard" element={<ProtectedRoute><EmployerDashboard /></ProtectedRoute>} />
+            <Route path="/pipeline" element={<DemoEmployerDashboard />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

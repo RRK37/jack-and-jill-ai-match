@@ -14,6 +14,39 @@ function stripCodeFence(raw: string): string {
     .trim();
 }
 
+// Defensive JSON extraction. LLM agents sometimes wrap their JSON in markdown
+// (headers, prose, code fences) despite prompt instructions. Try direct parse,
+// then code-fence stripping, then locate the first balanced object.
+export function extractJsonObject(raw: string): unknown {
+  const trimmed = raw.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // try next strategy
+  }
+
+  const stripped = stripCodeFence(trimmed);
+  try {
+    return JSON.parse(stripped);
+  } catch {
+    // try next strategy
+  }
+
+  const start = stripped.indexOf("{");
+  const end = stripped.lastIndexOf("}");
+  if (start !== -1 && end > start) {
+    try {
+      return JSON.parse(stripped.slice(start, end + 1));
+    } catch {
+      // fall through
+    }
+  }
+
+  throw new Error(
+    `Could not extract JSON from response: ${raw.slice(0, 200)}${raw.length > 200 ? "..." : ""}`
+  );
+}
+
 async function engineCall(slug: string, data: Record<string, string>): Promise<string> {
   // Chat endpoints use streaming to avoid platform timeouts
   const isChat = slug.includes("chat");
@@ -94,6 +127,90 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
   }
+}
+
+// ─── Direct engine call (bypasses Supabase edge function) ───
+// Used by the demo page so we can swap engines via .env without
+// redeploying the edge function. Reads VITE_ENGINE_URL and
+// VITE_ENGINE_API_KEY from .env.local.
+
+export interface EngineEvent {
+  type: string;
+  content: string;
+  agent?: string;
+  thread_id?: string;
+  meta?: Record<string, unknown>;
+}
+
+interface DirectEngineCallOptions {
+  dev?: boolean;
+  onEvent?: (event: EngineEvent) => void;
+}
+
+async function directEngineCall(
+  slug: string,
+  data: Record<string, unknown>,
+  options: DirectEngineCallOptions = {}
+): Promise<string> {
+  const engineUrl = import.meta.env.VITE_ENGINE_URL;
+  const apiKey = import.meta.env.VITE_ENGINE_API_KEY;
+
+  if (!engineUrl || !apiKey) {
+    throw new ApiError(
+      500,
+      "VITE_ENGINE_URL and VITE_ENGINE_API_KEY must be set in .env.local"
+    );
+  }
+
+  const path = options.dev ? `dev/run/${slug}` : `run/${slug}`;
+  const response = await fetch(`${engineUrl}/${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Fabriq-Key": apiKey,
+    },
+    body: JSON.stringify({ data }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => response.statusText);
+    throw new ApiError(response.status, errText || `Engine returned ${response.status}`);
+  }
+
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let tokenContent: string | null = null;
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      try {
+        const event = JSON.parse(line.slice(6)) as EngineEvent;
+        options.onEvent?.(event);
+        if (event.type === "token") {
+          tokenContent = event.content;
+        }
+        if (event.type === "error") {
+          throw new ApiError(500, event.content);
+        }
+      } catch (e) {
+        if (e instanceof ApiError) throw e;
+      }
+    }
+  }
+
+  if (tokenContent === null) {
+    throw new ApiError(502, "No token event received from engine");
+  }
+  return tokenContent;
 }
 
 // ─── Jack (Candidate AI Agent) ──────────────────────────
@@ -435,4 +552,142 @@ export async function updateCandidateStatus(
     .eq("id", matchId);
 
   if (error) throw new Error(error.message);
+}
+
+// ─── Demo: Match Candidate to Role ──────────────────────
+
+export interface DemoCandidateProfile {
+  name: string;
+  title: string;
+  skills: string[];
+  experience: string;
+  preferences: string;
+  goals: string;
+}
+
+export interface DemoJobDescription {
+  title: string;
+  responsibilities: string;
+  requirements: string;
+  compensation: string;
+}
+
+export interface DemoCompanyContext {
+  name: string;
+  culture: string;
+  size: string;
+  industry: string;
+  location: string;
+}
+
+export interface MatchResult {
+  score: number;
+  reason: string;
+}
+
+function isMatchResult(v: unknown): v is MatchResult {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    typeof (v as { score?: unknown }).score === "number" &&
+    typeof (v as { reason?: unknown }).reason === "string"
+  );
+}
+
+function cleanMarkdown(s: string): string {
+  return s
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^#+\s+/gm, "")
+    .replace(/^[-*\u2022]\s+/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function extractReasonFromProse(content: string): string {
+  // Prefer labelled sections in order of usefulness for a "match insight" panel.
+  const labels = ["Key Strength", "Recommendation", "Assessment Summary"];
+  for (const label of labels) {
+    const re = new RegExp(
+      `\\*{0,2}${label}\\*{0,2}\\s*:?\\s*\\*{0,2}\\s*([^\\n]+(?:\\n(?!\\s*\\n|\\s*\\*\\*[A-Z])[^\\n]+)*)`,
+      "i"
+    );
+    const m = content.match(re);
+    if (m && m[1]) {
+      const cleaned = cleanMarkdown(m[1]);
+      if (cleaned.length >= 20) return cleaned;
+    }
+  }
+  const cleaned = cleanMarkdown(content);
+  return cleaned.length > 360 ? cleaned.slice(0, 360).trim() + "..." : cleaned;
+}
+
+// If the synthesizer outputs prose instead of JSON (despite the schema),
+// rescue the score and reason via regex so the demo still renders.
+function rescueFromProse(content: string): MatchResult | null {
+  const scorePatterns = [
+    /final\s+score[^0-9]{0,20}(\d{1,3})/i,
+    /overall\s+score[^0-9]{0,20}(\d{1,3})/i,
+    /match\s+score[^0-9]{0,20}(\d{1,3})/i,
+    /total\s+score[^0-9]{0,20}(\d{1,3})/i,
+    /\b(\d{1,3})\s*\/\s*100\b/,
+  ];
+  let score: number | null = null;
+  for (const re of scorePatterns) {
+    const m = content.match(re);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (n >= 0 && n <= 100) {
+        score = n;
+        break;
+      }
+    }
+  }
+  if (score === null) return null;
+  return { score, reason: extractReasonFromProse(content) };
+}
+
+export async function matchCandidateToRole(
+  candidateProfile: DemoCandidateProfile,
+  jobDescription: DemoJobDescription,
+  companyContext: DemoCompanyContext,
+  onEvent?: (event: EngineEvent) => void
+): Promise<MatchResult> {
+  const content = await directEngineCall(
+    "match-candidate-to-role",
+    { candidateProfile, jobDescription, companyContext },
+    { dev: true, onEvent }
+  );
+
+  // Preferred path: synthesizer respects the schema and emits JSON.
+  let parsed: unknown = null;
+  try {
+    parsed = extractJsonObject(content);
+  } catch {
+    // No JSON in the response; fall through to prose rescue.
+  }
+  if (isMatchResult(parsed)) {
+    return parsed;
+  }
+
+  // Fallback: synthesizer is outputting markdown prose. Rescue via regex
+  // so the demo still renders. The synthesizer prompt should be fixed
+  // to enforce JSON output; this is a band-aid until then.
+  const rescued = rescueFromProse(content);
+  if (rescued) {
+    console.warn(
+      `[match-candidate-to-role] Synthesizer for ${candidateProfile.name} returned prose, not JSON. Rescued via regex (score=${rescued.score}). Fix the synthesizer prompt to enforce schema.`,
+      content
+    );
+    return rescued;
+  }
+
+  console.warn(
+    `[match-candidate-to-role] Could not extract a score or JSON for ${candidateProfile.name}. Raw synthesizer output:`,
+    content
+  );
+  throw new Error(
+    `Synthesizer output unparseable: ${content.slice(0, 200)}${content.length > 200 ? "..." : ""}`
+  );
 }
