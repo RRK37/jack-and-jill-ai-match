@@ -296,7 +296,7 @@ export default function DemoEmployerDashboard() {
               fontFamily: '"Instrument Serif", Georgia, serif',
             }}
           >
-            acme recruiting
+            pairwise
           </button>
           <div className="flex items-center gap-5">
             <span

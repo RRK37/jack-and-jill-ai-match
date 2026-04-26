@@ -14,7 +14,7 @@ const Landing = () => {
         {/* Nav */}
         <nav className="flex items-center justify-between px-6 md:px-12 py-6 border-b-2 border-border">
           <div className="font-display text-xl font-bold uppercase tracking-tight">
-            Jack & Jill
+            Pairwise
           </div>
 
           {/* Toggle */}
