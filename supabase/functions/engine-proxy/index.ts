@@ -4,7 +4,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const ENGINE_URL = "https://jack-jill-engine-api-production.up.railway.app";
+const ENGINE_URL = "https://engine-candidate-chat-q2s7-api-prod-c291.up.railway.app";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
